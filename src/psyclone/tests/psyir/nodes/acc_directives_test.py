@@ -320,6 +320,33 @@ def test_acckernelsdirective_gencode(default_present):
         "      END DO\n"
         "      !$acc end kernels\n" in code)
 
+# (1/1) Method gen_code
+@pytest.mark.parametrize("async_queue", [False, 1, Signature('stream1')])
+def test_acckernelsdirective_gencode(async_queue):
+    '''Check that the gen_code method in the ACCKernelsDirective class
+    generates the expected code. Use the dynamo0.3 API.
+
+    '''
+    _, info = parse(os.path.join(BASE_PATH, "1_single_invoke.f90"))
+    psy = PSyFactory(distributed_memory=False).create(info)
+    sched = psy.invokes.get('invoke_0_testkern_type').schedule
+
+    trans = ACCKernelsTrans()
+    trans.apply(sched, {"async_queue": async_queue})
+
+    code = str(psy.gen)
+    string = ""
+    if async_queue:
+        if isinstance(async_queue, int):
+            string = " async(1)"
+        elif isinstance(async_queue, Signature):
+            string = " async(stream1)"
+    assert (
+        f"      !$acc kernels{string}\n"
+        f"      DO cell=loop0_start,loop0_stop\n" in code)
+    assert (
+        "      END DO\n"
+        "      !$acc end kernels\n" in code)
 
 def test_acckerneldirective_equality():
     ''' Test the __eq__ method of ACCKernelsDirective node. '''
