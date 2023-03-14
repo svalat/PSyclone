@@ -192,12 +192,12 @@ class ACCEnterDataDirective(ACCStandaloneDirective):
     @async_queue.setter
     def async_queue(self, async_queue):
         '''
-        :param bool async_stream: wheter or not to add the 'async' close
+        :param bool async_queue: wheter or not to add the 'async' close
                                   and attach to which stream.
         '''
         # check
         if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
-            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+            raise TypeError("Invalid async_queue value, expect Signature or integer or None or False")
         
         # assign
         self._async_queue = async_queue
@@ -337,12 +337,12 @@ class ACCParallelDirective(ACCRegionDirective):
     @async_queue.setter
     def async_queue(self, async_queue):
         '''
-        :param bool async_stream: wheter or not to add the 'async' close
+        :param bool async_queue: wheter or not to add the 'async' close
                                   and attach to which stream.
         '''
         # check
         if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
-            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+            raise TypeError("Invalid async_queue value, expect Signature or integer or None or False")
         
         # assign
         self._async_queue = async_queue
@@ -645,10 +645,10 @@ class ACCKernelsDirective(ACCRegionDirective):
     :type parent: sub-class of :py:class:`psyclone.psyir.nodes.Node`
     :param bool default_present: whether or not to add the "default(present)" \
                                  clause to the kernels directive.
-    :param async_stream: Make the directive asynchonous and attached to the given
+    :param async_queue: Make the directive asynchonous and attached to the given
                          steam identified by an ID or by a variable name pointing to
                          an integer.
-    :type async_stream: bool/Signature/int
+    :type async_queue: bool/Signature/int
 
     :raises NotImplementedError: if default_present is False.
 
@@ -694,12 +694,12 @@ class ACCKernelsDirective(ACCRegionDirective):
     @async_queue.setter
     def async_queue(self, async_queue):
         '''
-        :param bool async_stream: wheter or not to add the 'async' close
+        :param bool async_queue: wheter or not to add the 'async' close
                                   and attach to which stream.
         '''
         # check
         if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
-            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+            raise TypeError("Invalid async_queue value, expect Signature or integer or None or False")
         
         # assign
         self._async_queue = async_queue
@@ -902,10 +902,10 @@ class ACCUpdateDirective(ACCStandaloneDirective):
                         clause on the update directive (this instructs the
                         directive to silently ignore any variables that are not
                         on the device).
-    :param async_stream: Make the directive asynchonous and attached to the given
+    :param async_queue: Make the directive asynchonous and attached to the given
                          steam identified by an ID or by a variable name pointing to
                          an integer.
-    :type async_stream: None/str/int
+    :type async_queue: None/str/int
     :type if_present: Optional[bool]
     '''
 
@@ -1020,12 +1020,12 @@ class ACCUpdateDirective(ACCStandaloneDirective):
     @async_queue.setter
     def async_queue(self, async_queue):
         '''
-        :param bool async_stream: whether or not to add the 'async' close
+        :param bool async_queue: whether or not to add the 'async' close
                                   and attach to which stream.
         '''
         # check
         if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
-            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+            raise TypeError("Invalid async_queue value, expect Signature or integer or None or False")
         
         # assign
         self._async_queue = async_queue
