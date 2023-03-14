@@ -173,6 +173,23 @@ def test_accenterdatadirective_gencode_4(trans1, trans2):
         "m2_proxy,m2_proxy%data,map_w1,map_w2,map_w3,ndf_w1,ndf_w2,ndf_w3,"
         "nlayers,undf_w1,undf_w2,undf_w3)\n" in code)
 
+# (3/4) Method gen_code
+def test_accenterdatadirective_gencode_3_async():
+    '''Test that we can acc the async directive on enter data.
+    '''
+    acc_trans = ACCKernelsTrans()
+    acc_enter_trans = ACCEnterDataTrans()
+    _, info = parse(os.path.join(BASE_PATH, "1_single_invoke.f90"))
+    psy = PSyFactory(distributed_memory=False).create(info)
+    sched = psy.invokes.get('invoke_0_testkern_type').schedule
+    acc_trans.apply(sched.children)
+    acc_enter_trans.apply(sched, options = {"async_queue": 3})
+    code = str(psy.gen)
+    assert (
+        "      !$acc enter data copyin(f1_proxy,f1_proxy%data,"
+        "f2_proxy,f2_proxy%data,m1_proxy,m1_proxy%data,m2_proxy,"
+        "m2_proxy%data,map_w1,map_w2,map_w3,ndf_w1,ndf_w2,ndf_w3,nlayers,"
+        "undf_w1,undf_w2,undf_w3) async(3)\n" in code)
 
 # Class ACCLoopDirective start
 
