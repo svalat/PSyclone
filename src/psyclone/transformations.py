@@ -2518,11 +2518,12 @@ class ACCKernelsTrans(RegionTrans):
         if not options:
             options = {}
         default_present = options.get("default_present", False)
+        async_queue = options.get("async_queue", False)
 
         # Create a directive containing the nodes in node_list and insert it.
         directive = ACCKernelsDirective(
             parent=parent, children=[node.detach() for node in node_list],
-            default_present=default_present)
+            default_present=default_present, async_queue=async_queue)
 
         parent.children.insert(start_index, directive)
 
@@ -2568,6 +2569,20 @@ class ACCKernelsTrans(RegionTrans):
                 "A kernels transformation must enclose at least one loop or "
                 "array range but none were found.")
 
+        # do not has mixed async
+        async_queue = None
+        if options != None:
+            async_queue = options.get('async_queue', False)
+        if async_queue != False:
+            directive_cls = (ACCKernelsDirective, ACCParallelDirective)
+            for directive in sched.walk(directive_cls):
+                if directive.async_queue != False and directive.async_queue != async_queue:
+                    raise TransformationError(f"Tried to apply async() while another one is used internally \
+                                               with different queue ({async_queue} != {directive.async_queue}) !")
+            directive = sched.ancestor(directive_cls)
+            if directive and directive.async_queue != False and directive.async_queue != async_queue:
+                raise TransformationError(f"Tried to apply async() while another one is used in ancestor \
+                                            with different queue ({async_queue} != {directive.async_queue}) !")
 
 class ACCDataTrans(RegionTrans):
     '''
