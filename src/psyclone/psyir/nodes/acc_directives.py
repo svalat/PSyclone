@@ -531,13 +531,18 @@ class ACCKernelsDirective(ACCRegionDirective):
     :type parent: sub-class of :py:class:`psyclone.psyir.nodes.Node`
     :param bool default_present: whether or not to add the "default(present)" \
                                  clause to the kernels directive.
+    :param async_stream: Make the directive asynchonous and attached to the given
+                         steam identified by an ID or by a variable name pointing to
+                         an integer.
+    :type async_stream: bool/Signature/int
 
     :raises NotImplementedError: if default_present is False.
 
     '''
-    def __init__(self, children=None, parent=None, default_present=True):
+    def __init__(self, children=None, parent=None, default_present=True, async_queue=False):
         super().__init__(children=children, parent=parent)
         self._default_present = default_present
+        self.async_queue = async_queue
 
     def __eq__(self, other):
         '''
@@ -551,6 +556,7 @@ class ACCKernelsDirective(ACCRegionDirective):
         '''
         is_eq = super().__eq__(other)
         is_eq = is_eq and self.default_present == other.default_present
+        is_eq = is_eq and self.async_queue == other.async_queue
 
         return is_eq
 
@@ -562,6 +568,27 @@ class ACCKernelsDirective(ACCRegionDirective):
         :rtype: bool
         '''
         return self._default_present
+
+    @property
+    def async_queue(self):
+        '''
+        :returns: whether or not to add the 'async' cleause and attach to which stream.
+        :rtype: bool or Signature or int
+        '''
+        return self._async_queue
+
+    @async_queue.setter
+    def async_queue(self, async_queue):
+        '''
+        :param bool async_stream: wheter or not to add the 'async' close
+                                  and attach to which stream.
+        '''
+        # check
+        if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
+            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+        
+        # assign
+        self._async_queue = async_queue
 
     def gen_code(self, parent):
         '''
@@ -596,8 +623,14 @@ class ACCKernelsDirective(ACCRegionDirective):
 
         '''
         result = "acc kernels"
+
+        # present
         if self._default_present:
             result += " default(present)"
+
+        # async
+        result += _build_async_string(self._async_queue)
+
         return result
 
     def end_string(self):
