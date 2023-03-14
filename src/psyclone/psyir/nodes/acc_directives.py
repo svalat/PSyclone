@@ -174,11 +174,33 @@ class ACCEnterDataDirective(ACCStandaloneDirective):
                    directive as a child.
     :type parent: :py:class:`psyclone.psyir.nodes.Node`
     '''
-    def __init__(self, children=None, parent=None):
+    def __init__(self, children=None, parent=None, async_queue=False):
         super().__init__(children=children, parent=parent)
         self._acc_dirs = None  # List of parallel directives
+        self.async_queue = async_queue
 
         self._sig_set = set()
+
+    @property
+    def async_queue(self):
+        '''
+        :returns: whether or not to add the 'async' cleause and attach to which stream.
+        :rtype: bool or Signature or int
+        '''
+        return self._async_queue
+
+    @async_queue.setter
+    def async_queue(self, async_queue):
+        '''
+        :param bool async_stream: wheter or not to add the 'async' close
+                                  and attach to which stream.
+        '''
+        # check
+        if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
+            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+        
+        # assign
+        self._async_queue = async_queue
 
     def gen_code(self, parent):
         '''Generate the elements of the f2pygen AST for this Node in the
@@ -197,11 +219,14 @@ class ACCEnterDataDirective(ACCStandaloneDirective):
         # incompatible with class DirectiveGen() we are using below.
         self.begin_string()
 
+        # async
+        async_option = _build_async_string(self._async_queue)
+
         # Add the enter data directive.
         sym_list = _sig_set_to_string(self._sig_set)
         copy_in_str = f"copyin({sym_list})"
         parent.add(DirectiveGen(parent, "acc", "begin", "enter data",
-                                copy_in_str))
+                                copy_in_str + async_option))
         # Call an API-specific subclass of this class in case
         # additional declarations are required.
         self.data_on_device(parent)
@@ -252,9 +277,15 @@ class ACCEnterDataDirective(ACCStandaloneDirective):
 
         sym_list = _sig_set_to_string(self._sig_set)
 
+        # options
+        options = f" copyin({sym_list}"
+
+        # async
+        options += _build_async_string(self._async_queue)
+
         # Variables need lexicographic sorting since sets guarantee no ordering
         # and members of composite variables must appear later in deep copies.
-        return f"acc enter data copyin({sym_list})"
+        return f"acc enter data{options})"
 
     def data_on_device(self, parent):
         '''
@@ -276,6 +307,46 @@ class ACCParallelDirective(ACCRegionDirective):
     a DataDirective.
 
     '''
+    def __init__(self, children=None, parent=None, async_queue=False):
+        super().__init__(children=children, parent=parent)
+        self.async_queue = async_queue
+
+    def __eq__(self, other):
+        '''
+        Checks whether two nodes are equal. Two ACCParallelDirective nodes are
+        equal if their default_present members are equal.
+
+        :param object other: the object to check equality to.
+
+        :returns: whether other is equal to self.
+        :rtype: bool
+        '''
+        is_eq = super().__eq__(other)
+        is_eq = is_eq and self.async_queue == other.async_queue
+
+        return is_eq
+
+    @property
+    def async_queue(self):
+        '''
+        :returns: whether or not to add the 'async' cleause and attach to which stream.
+        :rtype: bool or Signature or int
+        '''
+        return self._async_queue
+
+    @async_queue.setter
+    def async_queue(self, async_queue):
+        '''
+        :param bool async_stream: wheter or not to add the 'async' close
+                                  and attach to which stream.
+        '''
+        # check
+        if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
+            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+        
+        # assign
+        self._async_queue = async_queue
+
     def gen_code(self, parent):
         '''
         Generate the elements of the f2pygen AST for this Node in the Schedule.
@@ -286,8 +357,9 @@ class ACCParallelDirective(ACCRegionDirective):
         '''
         self.validate_global_constraints()
 
+        begin_args = ' '.join(self.begin_string().split()[2:])
         parent.add(DirectiveGen(parent, "acc", "begin", "parallel",
-                                "default(present)"))
+                                begin_args))
 
         for child in self.children:
             child.gen_code(parent)
@@ -310,7 +382,14 @@ class ACCParallelDirective(ACCRegionDirective):
         # all data required by the parallel region is already present
         # on the device. If we've made a mistake and it isn't present
         # then we'll get a run-time error.
-        return "acc parallel default(present)"
+
+        # present
+        options = " default(present)"
+
+        # async
+        options += _build_async_string(self._async_queue)
+
+        return f"acc parallel{options}"
 
     def end_string(self):
         '''
@@ -569,7 +648,7 @@ class ACCKernelsDirective(ACCRegionDirective):
     :param async_stream: Make the directive asynchonous and attached to the given
                          steam identified by an ID or by a variable name pointing to
                          an integer.
-    :type async_stream: bool/Signature/int
+    :type async_stream: bool or Signature or int
 
     :raises NotImplementedError: if default_present is False.
 
@@ -886,7 +965,7 @@ class ACCUpdateDirective(ACCStandaloneDirective):
     def async_queue(self):
         '''
         :returns: whether or not to add the 'async' cleause and attach to which stream.
-        :rtype: str/int
+        :rtype: str or int
         '''
         return self._async_queue
 
@@ -941,7 +1020,7 @@ class ACCUpdateDirective(ACCStandaloneDirective):
     @async_queue.setter
     def async_queue(self, async_queue):
         '''
-        :param bool async_stream: wether or not to add the 'async' close
+        :param bool async_stream: wheter or not to add the 'async' close
                                   and attach to which stream.
         '''
         # check
