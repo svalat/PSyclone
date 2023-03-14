@@ -50,7 +50,8 @@ from psyclone.f2pygen import ModuleGen
 from psyclone.parse.algorithm import parse
 from psyclone.psyGen import PSyFactory
 from psyclone.psyir.nodes import ACCRoutineDirective, \
-    ACCKernelsDirective, Schedule, ACCUpdateDirective, ACCLoopDirective
+    ACCKernelsDirective, Schedule, ACCUpdateDirective, ACCLoopDirective, \
+    ACCWaitDirective, Routine
 from psyclone.psyir.symbols import SymbolTable
 from psyclone.transformations import ACCEnterDataTrans, ACCParallelTrans, \
     ACCKernelsTrans
@@ -403,3 +404,46 @@ def test_accupdatedirective_equality():
     # Check equality fails when different if_present settings
     directive5 = ACCUpdateDirective(sig, "device", if_present=False)
     assert directive1 != directive5
+
+
+# Class ACCWaitDirective
+
+# (1/1) Method __init__
+def test_accwaitdirective_init():
+    directive1 = ACCWaitDirective(None)
+    assert directive1.wait_queue == None
+
+    directive2 = ACCWaitDirective(None)
+    assert directive2.wait_queue == None
+
+    directive4 = ACCWaitDirective(1)
+    assert directive4.wait_queue == 1
+
+    directive4 = ACCWaitDirective(Signature("variable_name"))
+    assert directive4.wait_queue == Signature("variable_name")
+
+    with pytest.raises(TypeError):
+        directive5 = ACCWaitDirective(3.5)
+
+# (1/1) Method begin_string
+def test_accwaitdirective_begin_string():
+    directive1 = ACCWaitDirective(None)
+    assert directive1.begin_string() == "acc wait"
+
+    directive2 = ACCWaitDirective(None)
+    assert directive2.begin_string() == "acc wait"
+
+    directive3 = ACCWaitDirective(1)
+    assert directive3.begin_string() == "acc wait (1)"
+
+    directive4 = ACCWaitDirective(Signature("variable_name"))
+    assert directive4.begin_string() == "acc wait (variable_name)"
+
+# (1/1) Method gencode
+def test_accwaitdirective_gencode():
+    _, info = parse(os.path.join(BASE_PATH, "1_single_invoke.f90"))
+    psy = PSyFactory(distributed_memory=False).create(info)
+    routines = psy.container.walk(Routine)
+    routines[0].children.append(ACCWaitDirective(1))
+    code = str(psy.gen)
+    assert '$acc wait (1)' in code

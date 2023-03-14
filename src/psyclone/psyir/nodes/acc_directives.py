@@ -934,8 +934,82 @@ def _sig_set_to_string(sig_set):
     return ",".join(sorted(names))
 
 
+class ACCWaitDirective(ACCStandaloneDirective):
+    '''
+    Class representing the !$ACC WAIT directive in the PSyIR.
+
+    :param wait_queue: Which ACC async group to wait. None to wait all.
+    :type wait_queue: None/int/Signature
+    '''
+    def __init__(self, wait_queue=None):
+        # call parent
+        super().__init__()
+        self.wait_queue = wait_queue
+
+    def __eq__(self, other):
+        '''
+        Test the equality of two directives.
+
+        :returns: If the two directives are equals.
+        :rtype: bool
+        '''
+        is_eq = super().__eq__(other)
+        is_eq = is_eq and self._wait_queue == other._wait_queue
+        return is_eq
+
+    @property
+    def wait_queue(self):
+        '''
+        :returns: Define which queue to wait.
+        :rtype: None or str or int
+        '''
+        return self._wait_queue
+    
+    @wait_queue.setter
+    def wait_queue(self, wait_queue):
+        # check
+        if wait_queue != None and not isinstance(wait_queue, (int, Signature)):
+            raise TypeError("Invalid value type as wait_group, shoule be in (None, int, Signature) !")
+        
+        # set
+        self._wait_queue = wait_queue
+
+    def gen_code(self, parent):
+        '''
+        Generate the given directive code to add it to the call tree.
+
+        :param parent: the parent Node in the Schedule to which to add this \
+                       content.
+        :type parent: sub-class of :py:class:`psyclone.f2pygen.BaseGen`
+        '''
+        # Generate the directive
+        args = ' '.join(self.begin_string().split()[2:])
+        parent.add(DirectiveGen(parent, "acc", "begin", "wait", args))
+
+    def begin_string(self):
+        '''Returns the beginning statement of this directive, i.e.
+        "acc wait ...". The backend is responsible for adding the
+        correct directive beginning (e.g. "!$").
+
+        :returns: the beginning statement for this directive.
+        :rtype: str
+
+        '''
+        # default basic directive
+        result = "acc wait"
+
+        # handle specifying groups
+        if self._wait_queue != None:
+            if isinstance(self._wait_queue, Signature):
+                result += f" ({self._wait_queue.var_name})"
+            else:
+                result += f" ({self._wait_queue})"
+
+        # ok return it
+        return result
+
 # For automatic API documentation generation
 __all__ = ["ACCRegionDirective", "ACCEnterDataDirective",
            "ACCParallelDirective", "ACCLoopDirective", "ACCKernelsDirective",
            "ACCDataDirective", "ACCUpdateDirective", "ACCStandaloneDirective",
-           "ACCDirective", "ACCRoutineDirective"]
+           "ACCDirective", "ACCRoutineDirective", "ACCWaitDirective"]
