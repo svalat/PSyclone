@@ -755,18 +755,22 @@ class ACCUpdateDirective(ACCStandaloneDirective):
                         clause on the update directive (this instructs the
                         directive to silently ignore any variables that are not
                         on the device).
+    :param async_stream: Make the directive asynchonous and attached to the given
+                         steam identified by an ID or by a variable name pointing to
+                         an integer.
+    :type async_stream: None/str/int
     :type if_present: Optional[bool]
     '''
 
     _VALID_DIRECTIONS = ("self", "host", "device")
 
     def __init__(self, signatures, direction, children=None, parent=None,
-                 if_present=True):
+                 if_present=True, async_queue=False):
         super().__init__(children=children, parent=parent)
-
         self.sig_set = signatures
         self.direction = direction
         self.if_present = if_present
+        self.async_queue = async_queue
 
     def __eq__(self, other):
         '''
@@ -782,6 +786,7 @@ class ACCUpdateDirective(ACCStandaloneDirective):
         is_eq = is_eq and self.sig_set == other.sig_set
         is_eq = is_eq and self.direction == other.direction
         is_eq = is_eq and self.if_present == other.if_present
+        is_eq = is_eq and self.async_queue == other.async_queue
 
         return is_eq
 
@@ -808,6 +813,14 @@ class ACCUpdateDirective(ACCStandaloneDirective):
         :rtype: bool
         '''
         return self._if_present
+
+    @property
+    def async_queue(self):
+        '''
+        :returns: whether or not to add the 'async' cleause and attach to which stream.
+        :rtype: str/int
+        '''
+        return self._async_queue
 
     @sig_set.setter
     def sig_set(self, signatures):
@@ -857,6 +870,19 @@ class ACCUpdateDirective(ACCStandaloneDirective):
 
         self._if_present = if_present
 
+    @async_queue.setter
+    def async_queue(self, async_queue):
+        '''
+        :param bool async_stream: wether or not to add the 'async' close
+                                  and attach to which stream.
+        '''
+        # check
+        if async_queue != None and not isinstance(async_queue, (bool, Signature, int)):
+            raise TypeError("Invalid async_stream value, expect Signature or integer or None or False")
+        
+        # assign
+        self._async_queue = async_queue
+
     def begin_string(self):
         '''
         Returns the beginning statement of this directive, i.e.
@@ -880,7 +906,10 @@ class ACCUpdateDirective(ACCStandaloneDirective):
         condition = "if_present " if self._if_present else ""
         sym_list = _sig_set_to_string(self._sig_set)
 
-        return f"acc update {condition}{self._direction}({sym_list})"
+        # async
+        asyncvalue = _build_async_string(self._async_queue)
+
+        return f"acc update {condition}{self._direction}({sym_list}){asyncvalue}"
 
 
 def _sig_set_to_string(sig_set):
@@ -897,6 +926,24 @@ def _sig_set_to_string(sig_set):
     '''
     names = {s[:i+1].to_language() for s in sig_set for i in range(len(s))}
     return ",".join(sorted(names))
+
+def _build_async_string(async_queue):
+    # default
+    result = ""
+
+    # async
+    if async_queue:
+        if isinstance(async_queue, bool):
+            result = " async()"
+        elif isinstance(async_queue, int):
+            result = f" async({async_queue})"
+        elif isinstance(async_queue, Signature):
+            result = f" async({async_queue.var_name})"
+        else:
+            raise TypeError(f"Invalid type for async argument : {async_queue} !")
+    
+    # ok
+    return result
 
 
 class ACCWaitDirective(ACCStandaloneDirective):
