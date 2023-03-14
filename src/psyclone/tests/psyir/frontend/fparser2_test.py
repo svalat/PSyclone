@@ -626,12 +626,13 @@ def test_get_routine_schedules_unmatching_arguments(parser):
     # Test exception for unmatching argument list
     with pytest.raises(InternalError) as error:
         _ = processor.get_routine_schedules("dummy_code", ast)
-    assert ("PSyclone internal error: The kernel argument list:\n"
-            "'['f1', 'f2', 'f3', 'f4']'\n"
-            "does not match the variable declarations:\n"
+    assert ("PSyclone internal error: The argument list ['f1', 'f2', 'f3', "
+            "'f4'] for routine 'dummy_code' does not match the variable "
+            "declarations:\n"
             "REAL(KIND = wp), DIMENSION(:, :), INTENT(IN) :: f1\n"
             "REAL(KIND = wp), DIMENSION(:, :), INTENT(OUT) :: f2\n"
             "REAL(KIND = wp), DIMENSION(:, :) :: f3\n"
+            "(Note that PSyclone does not support implicit declarations.) "
             "Specific PSyIR error is \"Could not find 'f4' in the "
             "Symbol Table.\"." in str(error.value))
 
@@ -819,6 +820,24 @@ def test_process_declarations_accessibility():
         visibility_map={"z": Symbol.Visibility.PRIVATE})
     zsym = sched.symbol_table.lookup("z")
     assert zsym.visibility == Symbol.Visibility.PRIVATE
+
+
+@pytest.mark.usefixtures("f2008_parser")
+def test_process_multiple_access_statements():
+    ''' Check that process_access_statements handles code containing multiple
+    access statements. '''
+    processor = Fparser2Reader()
+    reader = FortranStringReader(
+        "PUBLIC  fjb_typ\n"
+        "private y\n"
+        "PUBLIC  fbge_ctl_typ,  fbge_typ\n"
+        "private :: x\n")
+    fparser2spec = Specification_Part(reader).content
+    _, vis_map = processor.process_access_statements(fparser2spec)
+    assert vis_map["y"] == Symbol.Visibility.PRIVATE
+    assert vis_map["x"] == Symbol.Visibility.PRIVATE
+    assert vis_map["fjb_typ"] == Symbol.Visibility.PUBLIC
+    assert vis_map["fbge_typ"] == Symbol.Visibility.PUBLIC
 
 
 @pytest.mark.usefixtures("f2008_parser")

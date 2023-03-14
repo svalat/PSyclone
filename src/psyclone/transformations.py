@@ -2283,9 +2283,14 @@ class ACCEnterDataTrans(Transformation):
                 current = current.parent
             posn = sched.children.index(current)
 
+        # handle async option
+        async_queue = None
+        if options != None:
+            async_queue = options.get('async_queue', False)
+
         # Add the directive at the position determined above, i.e. just before
         # the first statemement containing an OpenACC compute construct.
-        data_dir = AccEnterDataDir(parent=sched, children=[])
+        data_dir = AccEnterDataDir(parent=sched, children=[], async_queue=async_queue)
         sched.addchild(data_dir, index=posn)
 
     def validate(self, sched, options=None):
@@ -2315,6 +2320,21 @@ class ACCEnterDataTrans(Transformation):
         if sched.walk(directive_cls, stop_type=directive_cls):
             raise TransformationError("Schedule already has an OpenACC data "
                                       "region - cannot add an enter data.")
+
+        # do not has mixed async
+        async_queue = None
+        if options != None:
+            async_queue = options.get('async_queue', False)
+        if async_queue != False:
+            directive_cls = (ACCKernelsDirective, ACCParallelDirective)
+            for directive in sched.walk(directive_cls):
+                if directive.async_queue != False and directive.async_queue != async_queue:
+                    raise TransformationError(f"Tried to apply async() while another one is used internally \
+                                               with different queue ({async_queue} != {directive.async_queue}) !")
+            directive = sched.ancestor(directive_cls)
+            if directive and directive.async_queue != False and directive.async_queue != async_queue:
+                raise TransformationError(f"Tried to apply async() while another one is used in ancestor \
+                                            with different queue ({async_queue} != {directive.async_queue}) !")
 
 
 class ACCRoutineTrans(Transformation):
@@ -2498,11 +2518,12 @@ class ACCKernelsTrans(RegionTrans):
         if not options:
             options = {}
         default_present = options.get("default_present", False)
+        async_queue = options.get("async_queue", False)
 
         # Create a directive containing the nodes in node_list and insert it.
         directive = ACCKernelsDirective(
             parent=parent, children=[node.detach() for node in node_list],
-            default_present=default_present)
+            default_present=default_present, async_queue=async_queue)
 
         parent.children.insert(start_index, directive)
 
@@ -2535,6 +2556,33 @@ class ACCKernelsTrans(RegionTrans):
                 "OpenACC kernels regions are currently only supported for the "
                 "nemo and dynamo0.3 front-ends")
         super().validate(node_list, options)
+
+        # Check that we have at least one loop or array range within
+        # the proposed region
+        for node in node_list:
+            if (any(assign for assign in node.walk(Assignment)
+                    if assign.is_array_range) or node.walk(Loop)):
+                break
+        else:
+            # Branch executed if loop does not exit with a break
+            raise TransformationError(
+                "A kernels transformation must enclose at least one loop or "
+                "array range but none were found.")
+
+        # do not has mixed async
+        async_queue = None
+        if options != None:
+            async_queue = options.get('async_queue', False)
+        if async_queue != False:
+            directive_cls = (ACCKernelsDirective, ACCParallelDirective)
+            for directive in sched.walk(directive_cls):
+                if directive.async_queue != False and directive.async_queue != async_queue:
+                    raise TransformationError(f"Tried to apply async() while another one is used internally \
+                                               with different queue ({async_queue} != {directive.async_queue}) !")
+            directive = sched.ancestor(directive_cls)
+            if directive and directive.async_queue != False and directive.async_queue != async_queue:
+                raise TransformationError(f"Tried to apply async() while another one is used in ancestor \
+                                            with different queue ({async_queue} != {directive.async_queue}) !")
 
 
 class ACCDataTrans(RegionTrans):

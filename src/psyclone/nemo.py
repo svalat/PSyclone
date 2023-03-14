@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # BSD 3-Clause License
 #
-# Copyright (c) 2017-2022, Science and Technology Facilities Council.
+# Copyright (c) 2017-2023, Science and Technology Facilities Council.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -232,7 +232,7 @@ class NemoKern(InlinedKern):
         :param var_accesses: VariablesAccessInfo that stores the information\
             about variable accesses.
         :type var_accesses: \
-            :py:class:`psyclone.core.access_info.VariablesAccessInfo`
+            :py:class:`psyclone.core.VariablesAccessInfo`
         '''
         self.children[0].reference_accesses(var_accesses)
 
@@ -344,12 +344,16 @@ class NemoACCEnterDataDirective(ACCEnterDataDirective):
         In-place replacement of this directive concept into language-level
         PSyIR constructs.
 
+        :returns: the lowered version of this node.
+        :rtype: :py:class:`psyclone.psyir.node.Node`
+
         '''
-        super().lower_to_language_level()
+        lowered = super().lower_to_language_level()
 
         # Remove known loop variables from the set of variables to transfer
         loop_var = Config.get().api_conf("nemo").get_loop_type_mapping().keys()
         self._sig_set.difference_update({Signature(var) for var in loop_var})
+        return lowered
 
 
 class NemoACCUpdateDirective(ACCUpdateDirective):
@@ -362,9 +366,13 @@ class NemoACCUpdateDirective(ACCUpdateDirective):
         In-place replacement of this directive concept into language-level
         PSyIR constructs.
 
+        :returns: the lowered version of this node.
+        :rtype: :py:class:`psyclone.psyir.node.Node`
+
         '''
-        super().lower_to_language_level()
+        lowered = super().lower_to_language_level()
 
         # Remove known loop variables from the set of variables to transfer
         loop_var = Config.get().api_conf("nemo").get_loop_type_mapping().keys()
         self._sig_set.difference_update({Signature(var) for var in loop_var})
+        return lowered

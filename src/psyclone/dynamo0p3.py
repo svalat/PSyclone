@@ -53,8 +53,9 @@ import fparser
 from psyclone import psyGen
 from psyclone.configuration import Config
 from psyclone.core import AccessType, Signature
-from psyclone.domain.lfric.lfric_builtins import (
-    LFRicBuiltInCallFactory, LFRicBuiltIn, BUILTIN_MAP)
+from psyclone.domain.lfric.lfric_builtins import (LFRicTypes,
+                                                  LFRicBuiltInCallFactory,
+                                                  LFRicBuiltIn, BUILTIN_MAP)
 from psyclone.domain.common.psylayer import PSyLoop
 from psyclone.domain.lfric import (FunctionSpace, KernCallAccArgList,
                                    KernCallArgList, KernStubArgList,
@@ -896,7 +897,7 @@ class DynKernMetadata(KernelType):
         const = LFRicConstants()
         # A kernel which operates on the 'domain' is currently restricted
         # to only accepting scalar and field arguments.
-        valid_arg_types = (const.VALID_SCALAR_NAMES + const.VALID_FIELD_NAMES)
+        valid_arg_types = const.VALID_SCALAR_NAMES + const.VALID_FIELD_NAMES
         for arg in self._arg_descriptors:
             if arg.argument_type not in valid_arg_types:
                 raise ParseError(
@@ -1886,7 +1887,7 @@ class LFRicMeshProperties(DynCollection):
         :param var_accesses: optional VariablesAccessInfo instance to store \
             the information about variable accesses.
         :type var_accesses: \
-            :py:class:`psyclone.core.access_info.VariablesAccessInfo`
+            :py:class:`psyclone.core.VariablesAccessInfo`
         :param kern_call_arg_list: an optional KernCallArgList instance \
             used to store PSyIR representation of the arguments.
         :type kern_call_arg_list: \
@@ -3419,6 +3420,11 @@ class LFRicLoopBounds(DynCollection):
         api_config = config.api_conf("dynamo0.3")
 
         for idx, loop in enumerate(loops):
+
+            if loop.loop_type == "null":
+                # 'null' loops don't need any bounds.
+                continue
+
             root_name = f"loop{idx}_start"
             lbound = sym_table.find_or_create_integer_symbol(root_name,
                                                              tag=root_name)
@@ -7106,6 +7112,9 @@ class DynLoop(PSyLoop):
         the loop in the schedule, i.e. can change when transformations are
         applied), this function can likely be removed.
 
+        :returns: the lowered version of this node.
+        :rtype: :py:class:`psyclone.psyir.node.Node`
+
         '''
         super().lower_to_language_level()
         if self._loop_type != "null":
@@ -7118,17 +7127,19 @@ class DynLoop(PSyLoop):
                                       self.step_expr.copy(),
                                       self.loop_body.pop_all_children())
             self.replace_with(psy_loop)
-        else:
-            # Domain loop, i.e. no need for a loop at all. Remove the loop
-            # node (self), and insert its children directly
-            pos = self.position
-            parent = self.parent
-            self.detach()
-            all_children_reverse = reversed(self.loop_body.pop_all_children())
-            # Attach the children starting with the last, which
-            # preserves the original order of the children.
-            for child in all_children_reverse:
-                parent.children.insert(pos, child)
+            return psy_loop
+
+        # Domain loop, i.e. no need for a loop at all. Remove the loop
+        # node (self), and insert its children directly
+        pos = self.position
+        parent = self.parent
+        self.detach()
+        all_children_reverse = reversed(self.loop_body.pop_all_children())
+        # Attach the children starting with the last, which
+        # preserves the original order of the children.
+        for child in all_children_reverse:
+            parent.children.insert(pos, child)
+        return parent
 
     def node_str(self, colour=True):
         ''' Creates a text summary of this loop node. We override this
@@ -7982,7 +7993,7 @@ class DynKern(CodedKern):
         :param var_accesses: VariablesAccessInfo instance that stores the \
             information about variable accesses.
         :type var_accesses: \
-            :py:class:`psyclone.core.access_info.VariablesAccessInfo`
+            :py:class:`psyclone.core.VariablesAccessInfo`
         '''
 
         # Use the KernelCallArgList class, which can also provide variable
@@ -9098,6 +9109,7 @@ class DynKernelArguments(Arguments):
                 if function_space:
                     if func_space.mangled_name == function_space.mangled_name:
                         return arg
+
         raise FieldNotFoundError(f"DynKernelArguments:get_arg_on_space: there "
                                  f"is no field or operator with function space"
                                  f" {func_space.orig_name} (mangled name = "
@@ -9661,6 +9673,8 @@ class DynKernelArgument(KernelArgument):
                 argtype = "operator"
             elif alg_datatype == "r_solver_operator_type":
                 argtype = "r_solver_operator"
+            elif alg_datatype == "r_tran_operator_type":
+                argtype = "r_tran_operator"
             else:
                 raise GenerationError(
                     f"The metadata for argument '{self.name}' in kernel "
@@ -9819,7 +9833,7 @@ class DynKernelArgument(KernelArgument):
                     datatype=self.infer_datatype())
             return Reference(scalar_sym)
 
-        if self.is_field:
+        if self.is_field or self.is_operator:
             # Although the argument to a Kernel is a field, the data itself
             # is accessed through a field_proxy.
             try:
@@ -10091,10 +10105,8 @@ class DynKernelArgument(KernelArgument):
                 except KeyError:
                     # TODO Once #696 is done, we should *always* have a
                     # symbol for this container at this point so should
-                    # raise an exception if we haven't. Also, the name
-                    # of the Fortran module should be read from the config
-                    # file.
-                    constants_container = ContainerSymbol(const_mod)
+                    # raise an exception if we haven't.
+                    constants_container = LFRicTypes(const_mod)
                     root_table.add(constants_container)
                 kind_symbol = DataSymbol(
                     kind_name, INTEGER_TYPE,

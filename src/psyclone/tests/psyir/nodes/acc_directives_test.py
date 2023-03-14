@@ -49,7 +49,8 @@ from psyclone.f2pygen import ModuleGen
 from psyclone.parse.algorithm import parse
 from psyclone.psyGen import PSyFactory
 from psyclone.psyir.nodes import ACCRoutineDirective, \
-    ACCKernelsDirective, Schedule, ACCUpdateDirective, ACCLoopDirective
+    ACCKernelsDirective, Schedule, ACCUpdateDirective, ACCLoopDirective, \
+    ACCWaitDirective, Routine, ACCParallelDirective
 from psyclone.psyir.symbols import SymbolTable
 from psyclone.transformations import ACCEnterDataTrans, ACCParallelTrans, \
     ACCKernelsTrans
@@ -65,9 +66,7 @@ def setup():
     yield
     Config._instance = None
 
-
 # Class ACCEnterDataDirective start
-
 
 # (1/4) Method gen_code
 def test_accenterdatadirective_gencode_1():
@@ -172,6 +171,23 @@ def test_accenterdatadirective_gencode_4(trans1, trans2):
         "m2_proxy,m2_proxy%data,map_w1,map_w2,map_w3,ndf_w1,ndf_w2,ndf_w3,"
         "nlayers,undf_w1,undf_w2,undf_w3)\n" in code)
 
+# (3/4) Method gen_code
+def test_accenterdatadirective_gencode_3_async():
+    '''Test that we can acc the async directive on enter data.
+    '''
+    acc_trans = ACCKernelsTrans()
+    acc_enter_trans = ACCEnterDataTrans()
+    _, info = parse(os.path.join(BASE_PATH, "1_single_invoke.f90"))
+    psy = PSyFactory(distributed_memory=False).create(info)
+    sched = psy.invokes.get('invoke_0_testkern_type').schedule
+    acc_trans.apply(sched.children)
+    acc_enter_trans.apply(sched, options = {"async_queue": 3})
+    code = str(psy.gen)
+    assert (
+        "      !$acc enter data copyin(f1_proxy,f1_proxy%data,"
+        "f2_proxy,f2_proxy%data,m1_proxy,m1_proxy%data,m2_proxy,"
+        "m2_proxy%data,map_w1,map_w2,map_w3,ndf_w1,ndf_w2,ndf_w3,nlayers,"
+        "undf_w1,undf_w2,undf_w3) async(3)\n" in code)
 
 # Class ACCLoopDirective start
 
@@ -289,6 +305,33 @@ def test_acckernelsdirective_gencode(default_present):
         "      END DO\n"
         "      !$acc end kernels\n" in code)
 
+# (1/1) Method gen_code
+@pytest.mark.parametrize("async_queue", [False, 1, Signature('stream1')])
+def test_acckernelsdirective_gencode(async_queue):
+    '''Check that the gen_code method in the ACCKernelsDirective class
+    generates the expected code. Use the dynamo0.3 API.
+
+    '''
+    _, info = parse(os.path.join(BASE_PATH, "1_single_invoke.f90"))
+    psy = PSyFactory(distributed_memory=False).create(info)
+    sched = psy.invokes.get('invoke_0_testkern_type').schedule
+
+    trans = ACCKernelsTrans()
+    trans.apply(sched, {"async_queue": async_queue})
+
+    code = str(psy.gen)
+    string = ""
+    if async_queue:
+        if isinstance(async_queue, int):
+            string = " async(1)"
+        elif isinstance(async_queue, Signature):
+            string = " async(stream1)"
+    assert (
+        f"      !$acc kernels{string}\n"
+        f"      DO cell=loop0_start,loop0_stop\n" in code)
+    assert (
+        "      END DO\n"
+        "      !$acc end kernels\n" in code)
 
 def test_acckerneldirective_equality():
     ''' Test the __eq__ method of ACCKernelsDirective node. '''
@@ -353,6 +396,16 @@ def test_accupdatedirective_init():
 
     directive = ACCUpdateDirective(sig, "host", if_present=False)
     assert directive.if_present is False
+    assert directive.async_queue is False
+
+    directive = ACCUpdateDirective(sig, "host", async_queue=True)
+    assert directive.async_queue is True
+
+    directive = ACCUpdateDirective(sig, "host", async_queue=1)
+    assert directive.async_queue == 1
+
+    directive = ACCUpdateDirective(sig, "host", async_queue=Signature("var"))
+    assert directive.async_queue == Signature("var")
 
 
 def test_accupdatedirective_begin_string():
@@ -362,9 +415,15 @@ def test_accupdatedirective_begin_string():
     directive_host = ACCUpdateDirective(sig, "host", if_present=False)
     directive_device = ACCUpdateDirective(sig, "device")
     directive_empty = ACCUpdateDirective(set(), "host", if_present=False)
+    directive_async_default = ACCUpdateDirective(sig, "device", async_queue=True)
+    directive_async_queue_int = ACCUpdateDirective(sig, "device", async_queue=1)
+    directive_async_queue_str = ACCUpdateDirective(sig, "device", async_queue=Signature("var"))
 
     assert directive_host.begin_string() == "acc update host(x)"
     assert directive_device.begin_string() == "acc update if_present device(x)"
+    assert directive_async_default.begin_string() == "acc update if_present device(x) async()"
+    assert directive_async_queue_int.begin_string() == "acc update if_present device(x) async(1)"
+    assert directive_async_queue_str.begin_string() == "acc update if_present device(x) async(var)"
 
     with pytest.raises(GenerationError) as err:
         directive_empty.begin_string()
@@ -390,3 +449,102 @@ def test_accupdatedirective_equality():
     # Check equality fails when different if_present settings
     directive5 = ACCUpdateDirective(sig, "device", if_present=False)
     assert directive1 != directive5
+
+
+# Class ACCWaitDirective
+
+def test_accwaitdirective_init():
+    '''Test init of ACCWaitDirective.'''
+
+    directive1 = ACCWaitDirective(None)
+    assert directive1.wait_queue == None
+
+    directive2 = ACCWaitDirective(None)
+    assert directive2.wait_queue == None
+
+    directive4 = ACCWaitDirective(1)
+    assert directive4.wait_queue == 1
+
+    directive4 = ACCWaitDirective(Signature("variable_name"))
+    assert directive4.wait_queue == Signature("variable_name")
+
+    with pytest.raises(TypeError):
+        directive5 = ACCWaitDirective(3.5)
+
+def test_accwaitdirective_begin_string():
+    '''Test begin_string of ACCWaitDirective.'''
+
+    directive1 = ACCWaitDirective(None)
+    assert directive1.begin_string() == "acc wait"
+
+    directive2 = ACCWaitDirective(None)
+    assert directive2.begin_string() == "acc wait"
+
+    directive3 = ACCWaitDirective(1)
+    assert directive3.begin_string() == "acc wait (1)"
+
+    directive4 = ACCWaitDirective(Signature("variable_name"))
+    assert directive4.begin_string() == "acc wait (variable_name)"
+
+def test_accwaitdirective_gencode():
+    '''Test gen code of ACCWaitDirective'''
+
+    _, info = parse(os.path.join(BASE_PATH, "1_single_invoke.f90"))
+    psy = PSyFactory(distributed_memory=False).create(info)
+    routines = psy.container.walk(Routine)
+    routines[0].children.append(ACCWaitDirective(1))
+    code = str(psy.gen)
+    assert '$acc wait (1)' in code
+
+def test_accwaitdirective_eq():
+    '''Test the __eq__ implementation of ACCWaitDirective.'''
+
+    # build some
+    directive1 = ACCWaitDirective(1)
+    directive2 = ACCWaitDirective(1)
+    directive3 = ACCWaitDirective(Signature('stream1'))
+
+    # check equality
+    assert directive1 == directive2
+    assert not (directive1 == directive3)
+
+# async keyword on all classes
+
+@pytest.mark.parametrize("directive_type", [ACCKernelsDirective, ACCParallelDirective, ACCUpdateDirective])
+def test_directives_async_queue(directive_type):
+    '''Validate the various usage of async_queue parameter'''
+
+    # args
+    args = []
+    if directive_type == ACCUpdateDirective:
+        args = [[Signature('x')], 'host']
+
+    # set value at init
+    directive = directive_type(*args, async_queue=1)
+    assert directive.async_queue == 1
+    assert 'async(1)' in directive.begin_string()
+
+    # change value to true
+    directive.async_queue = True
+    assert directive.async_queue == True
+    assert 'async()' in directive.begin_string()
+
+    # change value to False
+    directive.async_queue = False
+    assert directive.async_queue == False
+    assert not 'async()' in directive.begin_string()
+
+    # change value to None
+    directive.async_queue = None
+    assert directive.async_queue == None
+    assert not 'async()' in directive.begin_string()
+
+    # change value afterward
+    directive.async_queue = Signature("stream")
+    assert directive.async_queue == Signature("stream")
+    assert 'async(stream)' in directive.begin_string()
+
+    # put wrong type
+    with pytest.raises(TypeError) as error:
+        directive.async_queue = 3.5
+    assert "Invalid async_queue" in str(error)

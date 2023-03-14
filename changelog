@@ -285,6 +285,52 @@
 	97) PR #2023 for #1975. Extends DynReferenceElement to ensure that
 	it adds related kernel arguments to KernCallArgList as PSyIR.
 
+	98) PR #2030 for #1529. Update eg19 Makefile so that compilation
+	works.
+
+	99) PR #2029 for #1567. Fix visibility issues with imported symbols.
+
+	100) PR #2024 for #1984. Fixes the dependence analysis for the case
+	where a single element of an array of fields is passed as an
+	argument to an LFRic built-in.
+
+	101) PR #1980 for #1978. Updated LFRic Infrastructure files in
+	PSyclone repository and PSyData libraries to support 32- and
+	64-bit mixed precision.
+
+	102) PR #2034 for #1864: Add support for adjoint test-harness
+	generation for kernels with operator arguments.
+
+	103) PR #2038 for #1998. Adds support for r_tran_operator_type to
+	LFRic (dynamo0.3).
+
+	104) PR #2036 for #2033. Splits core/access_info into its constiutent
+	classes and moves utility functions out of the DependencyTools
+	module.
+
+	105) PR #2056 for #2055. Extends the Reference2ArrayRange
+	transformation such that it rejects any References that are args to
+	the DEALLOCATE intrinsic.
+
+	106) PR #2047 for #2046. Adds a 'return' statement to the
+	lower_to_language_level() methods.
+
+	107) PR #2032 for #92. Forbid include statements (which should have been
+	processed by the preprocessor or fparser before PSyclone).
+
+	108) PR #1973 for #1904. Fix inlining issues with complex access
+	expressions (e.g. array offsets and partial derived types accesses).
+
+	109) PR #2044 for #1295. Changes LFRic psyir to avoid use of exec
+	and ensures that LFRicConstants is not created *before* the config.
+	file has been read.
+
+	110) PR #2066 for #1587. Introduces new DebugWriter visitor for
+	fast generation of Fortran-like content in error messages.
+
+	111) PR #1914 for #1891. Improves error handling when there are
+	undeclared arguments.
+
 release 2.3.1 17th of June 2022
 
 	1) PR #1747 for #1720. Adds support for If blocks to PSyAD.

@@ -48,7 +48,8 @@ import os
 import pytest
 
 from psyclone.configuration import Config
-from psyclone.domain.lfric import lfric_builtins, LFRicConstants, psyir
+from psyclone.core import Signature, VariablesAccessInfo
+from psyclone.domain.lfric import lfric_builtins, LFRicConstants, LFRicTypes
 from psyclone.domain.lfric.lfric_builtins import (LFRicBuiltInCallFactory,
                                                   LFRicBuiltIn)
 from psyclone.dynamo0p3 import DynKernelArgument
@@ -61,6 +62,7 @@ from psyclone.psyir.nodes import (Loop, Reference, UnaryOperation, Literal,
 from psyclone.psyir.symbols import (ArrayType, DataTypeSymbol, DeferredType,
                                     ScalarType)
 from psyclone.tests.lfric_build import LFRicBuild
+from psyclone.tests.utilities import get_invoke
 
 # Constants
 BASE_PATH = os.path.join(
@@ -499,8 +501,7 @@ def test_get_indexed_field_argument_refs():
     refs = kern.get_indexed_field_argument_references()
     # Kernel has two field arguments
     assert len(refs) == 2
-    # pylint:disable=no-member
-    array_1d = ArrayType(psyir.LfricRealScalarDataType(),
+    array_1d = ArrayType(LFRicTypes("LFRicRealScalarDataType")(),
                          [ArrayType.Extent.DEFERRED])
     for ref in refs:
         assert isinstance(ref, StructureReference)
@@ -4691,3 +4692,21 @@ def mesh_code_present(field_str, code):
         "      max_halo_depth_mesh = mesh%get_halo_depth()\n"
         "      !\n")
     assert output_dm_1 in code
+
+
+def test_field_access_info_for_arrays_in_builtins():
+    '''Tests that array of fields in LFRic builtins properly report access
+    information. For example,
+    call invoke( a_plus_X(f2(i), a, f1) )
+    must report the access to f2.
+
+    '''
+    _, invoke = get_invoke("15.1.8_a_plus_X_builtin_array_of_fields.f90",
+                           api=API, idx=0, dist_mem=False)
+    schedule = invoke.schedule
+    vai = VariablesAccessInfo(schedule)
+
+    assert Signature("f2") in vai
+
+    assert ("a: READ, df: READ+WRITE, f1: READ, f2: WRITE, loop0_start: READ, "
+            "loop0_stop: READ" == str(vai))

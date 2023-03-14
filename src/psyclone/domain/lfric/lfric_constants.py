@@ -61,6 +61,10 @@ class LFRicConstants():
         if LFRicConstants.HAS_BEEN_INITIALISED:
             return
 
+        if not Config.has_config_been_initialised():
+            raise InternalError("LFRicConstants is being created before the "
+                                "config file is loaded")
+
         LFRicConstants.HAS_BEEN_INITIALISED = True
         api_config = Config.get().api_conf("dynamo0.3")
 
@@ -136,8 +140,9 @@ class LFRicConstants():
         LFRicConstants.VALID_INTRINSIC_TYPES = supported_fortran_datatypes
 
         # Valid intrinsic types for field kernel argument data
-        # ('real' and 'integer').
-        LFRicConstants.VALID_FIELD_INTRINSIC_TYPES = ["real", "integer"]
+        # ('real', 'integer', and 'logical').
+        LFRicConstants.VALID_FIELD_INTRINSIC_TYPES = ["real", "integer",
+                                                      "logical"]
 
         # ---------- Mapping from metadata data_type to Fortran intrinsic type
         LFRicConstants.MAPPING_DATA_TYPES = \
@@ -367,6 +372,13 @@ class LFRicConstants():
                 "proxy_type": "r_solver_operator_proxy_type",
                 "intrinsic": "real",
                 "kind": "r_solver"},
+            # 'real'-valued operator with data of kind 'r_tran'
+            "r_tran_operator": {
+                "module": "r_tran_operator_mod",
+                "type": "r_tran_operator_type",
+                "proxy_type": "r_tran_operator_proxy_type",
+                "intrinsic": "real",
+                "kind": "r_tran"},
             # 'real'-valued columnwise operator with data of kind 'r_solver'
             "columnwise_operator": {
                 "module": "columnwise_operator_mod",

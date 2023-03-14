@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # BSD 3-Clause License
 #
-# Copyright (c) 2017-2022, Science and Technology Facilities Council.
+# Copyright (c) 2017-2023, Science and Technology Facilities Council.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -43,17 +43,20 @@
 
 from collections import OrderedDict
 import abc
+
 from psyclone.configuration import Config
 from psyclone.core import AccessType
 from psyclone.errors import GenerationError, InternalError, FieldNotFoundError
-from psyclone.f2pygen import CommentGen, CallGen, UseGen
+from psyclone.f2pygen import (AllocateGen, AssignGen, CallGen, CommentGen,
+                              DeclGen, DeallocateGen, DoGen, UseGen)
 from psyclone.parse.algorithm import BuiltInCall
 from psyclone.psyir.backend.fortran import FortranWriter
 from psyclone.psyir.backend.visitor import PSyIRVisitor
-from psyclone.psyir.nodes import Node, Schedule, Loop, Statement, Container, \
-    Routine, Call, OMPDoDirective
-from psyclone.psyir.symbols import DataSymbol, RoutineSymbol, Symbol, \
-    ContainerSymbol, ImportInterface, ArgumentInterface, DeferredType
+from psyclone.psyir.nodes import (Node, Schedule, Loop, Statement, Container,
+                                  Routine, Call, OMPDoDirective)
+from psyclone.psyir.symbols import (DataSymbol, RoutineSymbol, Symbol,
+                                    ContainerSymbol, ImportInterface,
+                                    ArgumentInterface, DeferredType)
 from psyclone.psyir.symbols.datatypes import UnknownFortranType
 
 # The types of 'intent' that an argument to a Fortran subroutine
@@ -1011,7 +1014,8 @@ class Kern(Statement):
     _children_valid_format = "<LeafNode>"
 
     def __init__(self, parent, call, name, ArgumentsClass, check=True):
-        super(Kern, self).__init__(self, parent=parent)
+        # pylint: disable=too-many-arguments
+        super().__init__(parent=parent)
         self._name = name
         self._iterates_over = call.ktype.iterates_over
         self._arguments = ArgumentsClass(call, self, check=check)
@@ -1076,9 +1080,9 @@ class Kern(Statement):
         :param var_accesses: VariablesAccessInfo instance that stores the \
             information about variable accesses.
         :type var_accesses: \
-            :py:class:`psyclone.core.access_info.VariablesAccessInfo`
+            :py:class:`psyclone.core.VariablesAccessInfo`
         '''
-        super(Kern, self).reference_accesses(var_accesses)
+        super().reference_accesses(var_accesses)
         var_accesses.next_location()
 
     @property
@@ -1131,7 +1135,6 @@ class Kern(Statement):
                                  neither 'real' nor 'integer'.
 
         '''
-        from psyclone.f2pygen import AssignGen, DeclGen, AllocateGen
         if not position:
             position = ["auto"]
         var_name = self._reduction_arg.name
@@ -1193,7 +1196,6 @@ class Kern(Statement):
                                  LFRicBuiltIn.
 
         '''
-        from psyclone.f2pygen import DoGen, AssignGen, DeallocateGen
         var_name = self._reduction_arg.name
         local_var_name = self.local_reduction_name
         local_var_ref = self._reduction_ref(var_name)
@@ -1456,6 +1458,9 @@ class CodedKern(Kern):
         PSyIR constructs. The CodedKern is implemented as a Call to a
         routine with the appropriate arguments.
 
+        :returns: the lowered version of this node.
+        :rtype: :py:class:`psyclone.psyir.node.Node`
+
         '''
         symtab = self.ancestor(InvokeSchedule).symbol_table
 
@@ -1484,6 +1489,7 @@ class CodedKern(Kern):
 
         # Swap itself with the appropriate Call node
         self.replace_with(call_node)
+        return call_node
 
     def gen_code(self, parent):
         '''
@@ -2702,23 +2708,7 @@ class Transformation(metaclass=abc.ABCMeta):
     '''Abstract baseclass for a transformation. Uses the abc module so it
     can not be instantiated.
 
-    :param writer: optional argument to set the type of writer to \
-        provide to a transformation for use when constructing error \
-        messages. Defaults to FortranWriter().
-    :type writer: :py:class:`psyclone.psyir.backend.visitor.PSyIRVisitor`
-
     '''
-    def __init__(self, writer=None):
-
-        if writer:
-            if not isinstance(writer, PSyIRVisitor):
-                raise TypeError(
-                    f"The writer argument to a transformation should be a "
-                    f"PSyIRVisitor, but found '{type(writer).__name__}'.")
-            self._writer = writer
-        else:
-            self._writer = FortranWriter()
-
     @property
     def name(self):
         '''
