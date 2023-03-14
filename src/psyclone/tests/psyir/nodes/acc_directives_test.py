@@ -367,6 +367,16 @@ def test_accupdatedirective_init():
 
     directive = ACCUpdateDirective(sig, "host", if_present=False)
     assert directive.if_present is False
+    assert directive.async_queue is False
+
+    directive = ACCUpdateDirective(sig, "host", async_queue=True)
+    assert directive.async_queue is True
+
+    directive = ACCUpdateDirective(sig, "host", async_queue=1)
+    assert directive.async_queue == 1
+
+    directive = ACCUpdateDirective(sig, "host", async_queue=Signature("var"))
+    assert directive.async_queue == Signature("var")
 
 
 def test_accupdatedirective_begin_string():
@@ -376,9 +386,15 @@ def test_accupdatedirective_begin_string():
     directive_host = ACCUpdateDirective(sig, "host", if_present=False)
     directive_device = ACCUpdateDirective(sig, "device")
     directive_empty = ACCUpdateDirective(set(), "host", if_present=False)
+    directive_async_default = ACCUpdateDirective(sig, "device", async_queue=True)
+    directive_async_queue_int = ACCUpdateDirective(sig, "device", async_queue=1)
+    directive_async_queue_str = ACCUpdateDirective(sig, "device", async_queue=Signature("var"))
 
     assert directive_host.begin_string() == "acc update host(x)"
     assert directive_device.begin_string() == "acc update if_present device(x)"
+    assert directive_async_default.begin_string() == "acc update if_present device(x) async()"
+    assert directive_async_queue_int.begin_string() == "acc update if_present device(x) async(1)"
+    assert directive_async_queue_str.begin_string() == "acc update if_present device(x) async(var)"
 
     with pytest.raises(GenerationError) as err:
         directive_empty.begin_string()
