@@ -396,10 +396,11 @@ class ACCLoopDirective(ACCRegionDirective):
     :type kwargs: unwrapped dict.
     '''
     def __init__(self, collapse=None, independent=True, sequential=False,
-                 gang=False, vector=False, **kwargs):
+                 gang=False, vector=False, private=None, **kwargs):
         self.collapse = collapse
         self._independent = independent
         self._sequential = sequential
+        self._private = private
         self._gang = gang
         self._vector = vector
         super().__init__(**kwargs)
@@ -456,6 +457,19 @@ class ACCLoopDirective(ACCRegionDirective):
                 f"integer or None, but value '{value}' has been given.")
 
         self._collapse = value
+
+
+    @property
+    def private(self):
+        return self._private
+
+    @private.setter
+    def private(self, value):
+        if value is not None and not isinstance(value, list):
+            raise TypeError(
+                f"The ACCLoopDirective private clause must be list "
+                f"or None, but value '{value}' has been given.")
+        self._private = value
 
     @property
     def independent(self):
@@ -585,6 +599,9 @@ class ACCLoopDirective(ACCRegionDirective):
                 clauses += ["independent"]
             if self._collapse:
                 clauses += [f"collapse({self._collapse})"]
+        if self._private:
+            as_text = ','.join(self._private)
+            clauses += [f"private({as_text})"]
         return " ".join(clauses)
 
     def end_string(self):
